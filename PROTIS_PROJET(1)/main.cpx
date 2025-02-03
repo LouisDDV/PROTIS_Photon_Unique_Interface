@@ -1,0 +1,51 @@
+#include "mbed.h"
+#include <cstring>
+
+BufferedSerial usb_pc(USBTX, USBRX, 115200); // Port série
+
+DigitalOut led(LED1);
+AnalogIn inE1(A0);  // Entrée analogique
+Ticker tik;
+
+volatile bool sampling_active = false;  // Indique si l'échantillonnage est actif
+
+void sampling() {
+    if (sampling_active) {
+        float signal_value = inE1.read();  // Lire le signal analogique (0 à 1.0)
+        
+        char buffer[20];
+        int len = sprintf(buffer, "%.6f\n", signal_value);  // Conversion en texte
+        usb_pc.write(buffer, len);  // Envoi via USB série
+    }
+}
+
+int main() {
+    led = 1;
+    wait_us(200000);
+    led = 0;
+    wait_us(200000);
+
+    char command;
+    
+    while (1) {
+        if (usb_pc.readable()) {
+            usb_pc.read(&command, 1);
+            
+            switch (command) {
+                case 'A':  // Commande pour démarrer l'échantillonnage
+                    sampling_active = true;
+                    tik.attach(&sampling, 100ms);  // Échantillonnage toutes les 2 ms
+                    break;
+                
+                case 'S':  // Commande pour arrêter l'échantillonnage
+                    sampling_active = false;
+                    tik.detach();  // Arrêter le Ticker
+                    break;
+
+                default:
+                    usb_pc.write("Commande non reconnue\n", 23);
+                    break;
+            }
+        }
+    }
+}
